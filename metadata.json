@@ -1,0 +1,6 @@
+{
+  "name": "Islamic Learning Center",
+  "description": "An interactive, beautifully crafted Islamic learning platform featuring interactive lessons, a digital Tasbih counter, real-time prayer calculation, Quranic audio, and an AI chat companion grounded in Islamic knowledge.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
