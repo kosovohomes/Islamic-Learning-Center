@@ -14,7 +14,7 @@ const FALLBACK_SURAH_LIST: SurahMeta[] = [
   { number: 114, name: "الناس", englishName: "An-Nas", englishNameTranslation: "Mankind", numberOfAyahs: 6, revelationType: "Meccan" },
 ];
 
-const AUDIO_BASE = "https://download.quranicaudio.com/quran/mishari_raashid_al_3afaasee/";
+const AUDIO_BASE = "https://server8.mp3quran.net/afs/";
 
 interface DisplayVerse {
   number: number;
