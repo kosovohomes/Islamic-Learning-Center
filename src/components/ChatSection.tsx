@@ -16,13 +16,12 @@ export default function ChatSection() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  // Load welcome dialogue on mount
   useEffect(() => {
     setMessages([
       {
         id: "msg-welcome",
         role: "model",
-        content: `Assalamu Alaykum (Peace be upon you)! 🌸 Welcome to the **Arabic and Islamic Knowledge Study Desk**.
+        content: `Assalamu Alaykum (Peace be upon you)! Welcome to the **Arabic and Islamic Knowledge Study Desk**.
 
 I am your AI educational study companion, trained in scholarly sources to assist you in investigating:
 1. **Quran Tafseer**: Detailed explanations, historical contexts, and linguistical translations.
@@ -35,7 +34,6 @@ I am your AI educational study companion, trained in scholarly sources to assist
     ]);
   }, []);
 
-  // Scroll to bottom on updates
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -84,9 +82,9 @@ I am your AI educational study companion, trained in scholarly sources to assist
         {
           id: `ai-err-${Date.now()}`,
           role: "model",
-          content: `⚠️ **API Communication Error**: ${e.message || "An unexpected error occurred."}
+          content: `**API Communication Error**: ${e.message || "An unexpected error occurred."}
           
-Please check that your network matches the dev server and your API keys are correctly defined inside AI Studio Secrets tab!`,
+Please ensure your GROQ_API_KEY is configured in the .env file. Get a free key at [console.groq.com](https://console.groq.com).`,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
       ]);
@@ -105,7 +103,6 @@ Please check that your network matches the dev server and your API keys are corr
   return (
     <div id="ai-chat-section" className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[640px]">
       
-      {/* Suggestions and tips column */}
       <div className="lg:col-span-4 bg-white rounded-2xl p-5 border border-slate-100 shadow-xs flex flex-col justify-between hidden lg:flex">
         <div>
           <span className="text-xs font-mono text-slate-400 font-medium mb-3 uppercase tracking-wider block">Recommended Seminars</span>
@@ -133,95 +130,52 @@ Please check that your network matches the dev server and your API keys are corr
         </div>
       </div>
 
-      {/* Main chat window */}
       <div className="lg:col-span-8 bg-white rounded-2xl p-4 border border-slate-100 shadow-xs flex flex-col justify-between h-full">
-        {/* Messages feed */}
         <div className="flex-1 overflow-y-auto space-y-4 px-1.5 pb-4">
           {messages.map((msg) => {
             const isUser = msg.role === "user";
             return (
-              <div
-                key={msg.id}
-                className={`flex gap-3 max-w-[85%] ${isUser ? "ml-auto flex-row-reverse" : "mr-auto"}`}
-              >
-                {/* Avatar icon */}
+              <div key={msg.id} className={`flex gap-3 max-w-[85%] ${isUser ? "ml-auto flex-row-reverse" : "mr-auto"}`}>
                 <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center border font-mono text-xs font-bold ${
-                  isUser
-                    ? "bg-slate-100 border-slate-200 text-slate-600"
-                    : "bg-emerald-500 border-emerald-500 text-slate-950 shadow-md shadow-emerald-500/10"
+                  isUser ? "bg-slate-100 border-slate-200 text-slate-600" : "bg-emerald-500 border-emerald-500 text-slate-950 shadow-md shadow-emerald-500/10"
                 }`}>
-                  {isUser ? "U" : "🕌"}
+                  {isUser ? "U" : "\uD83D\uDD4C"}
                 </div>
-
                 <div className="space-y-1">
                   <div className={`px-4 py-3 rounded-2xl text-[12.5px] tracking-tight leading-relaxed transition-all shadow-xs ${
-                    isUser
-                      ? "bg-slate-900 border border-slate-900 text-white rounded-tr-none"
-                      : "bg-slate-50 border border-slate-150 text-slate-900 rounded-tl-none prose prose-slate max-w-none"
+                    isUser ? "bg-slate-900 border border-slate-900 text-white rounded-tr-none" : "bg-slate-50 border border-slate-150 text-slate-900 rounded-tl-none prose prose-slate max-w-none"
                   }`}>
-                    {isUser ? (
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                    ) : (
-                      <div className="markdown-body">
-                        <Markdown>{msg.content}</Markdown>
-                      </div>
-                    )}
+                    {isUser ? <p className="whitespace-pre-wrap">{msg.content}</p> : <div className="markdown-body"><Markdown>{msg.content}</Markdown></div>}
                   </div>
-                  <span className={`text-[9px] font-mono text-slate-400 block ${isUser ? "text-right" : "text-left"}`}>
-                    {msg.timestamp}
-                  </span>
+                  <span className={`text-[9px] font-mono text-slate-400 block ${isUser ? "text-right" : "text-left"}`}>{msg.timestamp}</span>
                 </div>
               </div>
             );
           })}
 
-          {/* Loading status */}
           {isLoading && (
             <div className="flex gap-3 max-w-[85%] mr-auto">
-              <div className="w-8 h-8 rounded-full bg-emerald-500 border border-emerald-500 text-slate-950 flex items-center justify-center font-bold font-mono text-xs">
-                🕌
-              </div>
+              <div className="w-8 h-8 rounded-full bg-emerald-500 border border-emerald-500 text-slate-950 flex items-center justify-center font-bold font-mono text-xs">{"\uD83D\uDD4C"}</div>
               <div className="bg-slate-50 border border-slate-150 p-4 rounded-2xl rounded-tl-none flex items-center gap-3 shadow-xs">
                 <Loader className="w-4 h-4 text-emerald-600 animate-spin" />
                 <span className="text-xs font-mono text-slate-500">Consulting scholarly compiles...</span>
               </div>
             </div>
           )}
-
           <div ref={scrollRef} />
         </div>
 
-        {/* Suggested Prompts for smaller viewports */}
         <div className="lg:hidden flex gap-2 pb-3 overflow-x-auto select-none no-scrollbar">
           {SUGGESTED_PROMPTS.slice(0, 2).map((promptText, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleSendMessage(promptText)}
-              disabled={isLoading}
-              className="shrink-0 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[10px] py-1.5 px-3 rounded-full text-slate-600 font-medium transition-all max-w-[190px] truncate cursor-pointer"
-            >
+            <button key={idx} onClick={() => handleSendMessage(promptText)} disabled={isLoading} className="shrink-0 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[10px] py-1.5 px-3 rounded-full text-slate-600 font-medium transition-all max-w-[190px] truncate cursor-pointer">
               {promptText}
             </button>
           ))}
         </div>
 
-        {/* Input form */}
         <div className="flex items-center gap-2 border-t border-slate-100 pt-3">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyPress}
-            placeholder="Type your religious or linguistic study query here... (Press Enter to Send)"
-            rows={1}
-            disabled={isLoading}
-            className="flex-1 resize-none bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs outline-none transition-all disabled:opacity-55 disabled:cursor-not-allowed"
-          />
-          <button
-            onClick={() => handleSendMessage()}
-            disabled={!input.trim() || isLoading}
-            className="w-10 h-10 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/10 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
-            title="Send Message"
-          >
+          <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyPress} placeholder="Type your question here... (Enter to Send)" rows={1} disabled={isLoading} className="flex-1 resize-none bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs outline-none transition-all disabled:opacity-55 disabled:cursor-not-allowed" />
+          <button onClick={() => handleSendMessage()} disabled={!input.trim() || isLoading} className="w-10 h-10 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/10 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer" title="Send Message">
             <Send className="w-4 h-4 fill-slate-950" />
           </button>
         </div>

@@ -1,1 +1,44 @@
 @import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Scheherazade+New:wght@400;700&display=swap');
+
+@layer base {
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .font-amiri {
+    font-family: 'Amiri', serif;
+  }
+  .font-scheherazade {
+    font-family: 'Scheherazade New', serif;
+  }
+}
+
+.islamic-pattern {
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(5, 150, 105, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(5, 150, 105, 0.03) 0%, transparent 50%);
+}
+
+.verse-separator {
+  border-image: linear-gradient(90deg, transparent, rgba(5, 150, 105, 0.3), transparent) 1;
+}
+
+.tafsir-panel {
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.8), rgba(254, 243, 199, 0.6));
+  border: 1px solid rgba(217, 119, 6, 0.15);
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.3);
+  border-radius: 9999px;
+}

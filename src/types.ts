@@ -6,8 +6,8 @@ export interface ArabicLetter {
   initial: string;
   medial: string;
   final: string;
-  exampleWord: string; // Arabic word
-  exampleMeaning: string; // English meaning
+  exampleWord: string;
+  exampleMeaning: string;
 }
 
 export interface SurahVerse {
@@ -24,6 +24,28 @@ export interface Surah {
   numberOfAyahs: number;
   revelationType: "Meccan" | "Medinan";
   ayahs: SurahVerse[];
+}
+
+export interface SurahMeta {
+  number: number;
+  name: string;
+  englishName: string;
+  englishNameTranslation: string;
+  numberOfAyahs: number;
+  revelationType: "Meccan" | "Medinan";
+}
+
+export interface Bookmark {
+  surahNumber: number;
+  verseNumber: number;
+  surahName: string;
+  timestamp: string;
+}
+
+export interface ReadingProgress {
+  surahNumber: number;
+  verseNumber: number;
+  timestamp: string;
 }
 
 export interface Dua {
@@ -64,7 +86,7 @@ export interface Message {
 
 export interface PrayerTime {
   name: string;
-  time: string; // e.g., "04:30"
+  time: string;
 }
 
 export interface Tasbih {

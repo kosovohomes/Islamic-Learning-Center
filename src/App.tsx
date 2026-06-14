@@ -18,7 +18,6 @@ export default function App() {
   const [streak, setStreak] = useState<number>(0);
   const [completedPercent, setCompletedPercent] = useState<number>(0);
 
-  // Load tracker metrics to display in the header
   useEffect(() => {
     try {
       const savedHabits = localStorage.getItem("islamic_learning_habits");
@@ -36,7 +35,6 @@ export default function App() {
       console.error("Failed to load header stats", e);
     }
     
-    // Listen to localstorage updates if changed elsewhere
     const handleStorageChange = () => {
       const savedStreak = localStorage.getItem("islamic_learning_streak");
       if (savedStreak) setStreak(Number(savedStreak));
@@ -48,15 +46,13 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-12 transition-colors">
       
-      {/* 1. Global Navigation Bar */}
       <header className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-slate-200/60 z-30">
         <div id="main-header" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           
-          {/* Brand Logo & Classical Arabic Title */}
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg font-bold shadow-md shadow-emerald-600/10">
-              🕌
-            </div>
+            <a href="https://abcofislam.com" target="_blank" rel="noopener noreferrer" className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition-colors">
+              ABC of Islam
+            </a>
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-sans font-bold text-slate-900 tracking-tight text-sm sm:text-base">Islamic Learning Center</span>
@@ -64,11 +60,10 @@ export default function App() {
                   v1.2.0
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 font-sans tracking-wide leading-none hidden sm:block">مَرْكَزُ التَّعَلُّمِ الْإِسْلَامِيِّ</p>
+              <p className="text-[10px] text-slate-400 font-sans tracking-wide leading-none hidden sm:block">مَرْكَزُ التَّعَلُّمِ الْإِسْلَامِيِّ</p>
             </div>
           </div>
 
-          {/* Core Stats Overview */}
           <div className="flex items-center gap-3">
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl py-1 px-3 text-emerald-800 text-[11px] font-mono font-bold flex items-center gap-1.5">
               <Compass className="w-3.5 h-3.5 text-emerald-600" />
@@ -83,7 +78,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* 2. Primary Tab Selection Deck */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
         <div className="bg-white rounded-2xl p-2 border border-slate-200/60 shadow-xs flex items-center justify-between gap-2 overflow-x-auto select-none no-scrollbar mb-8">
           <div className="flex items-center gap-1.5 w-full">
@@ -114,7 +108,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* 3. Core Tabbed Views Section Switches */}
         <div className="mt-2">
           {activeTab === "alphabet" && <AlphabetSection />}
           {activeTab === "quran" && <QuranSection />}
@@ -124,12 +117,16 @@ export default function App() {
         </div>
       </main>
 
-      {/* 4. Global Footer Credits */}
       <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16 border-t border-slate-200/60 pt-6 text-center">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-slate-400 font-sans tracking-tight">
-            © 2026 Interactive Islamic Learning Center. Proudly built for learning, recitation guidance, and scholarly exploration.
-          </p>
+          <div className="flex items-center gap-2">
+            <a href="https://abcofislam.com" target="_blank" rel="noopener noreferrer" className="bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold px-2 py-1 rounded transition-colors">
+              ABC of Islam
+            </a>
+            <p className="text-xs text-slate-400 font-sans tracking-tight">
+              © 2026 Interactive Islamic Learning Center. Proudly built for learning, recitation guidance, and scholarly exploration.
+            </p>
+          </div>
           <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
             <Sparkles className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
             <span>Islamic Studies Portfolio Initiative</span>

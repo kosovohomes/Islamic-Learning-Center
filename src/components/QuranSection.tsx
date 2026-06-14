@@ -1,312 +1,340 @@
-import React, { useState, useEffect, useRef } from "react";
-import { SURAHS } from "../data";
-import { Surah, SurahVerse } from "../types";
-import { Play, Pause, Bookmark, BookmarkCheck, Volume2, Type, RefreshCw, Layers } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { fetchAllSurahs, fetchSurahDetail, searchQuran, fetchTafsir } from "../api/quran";
+import { SurahMeta, Bookmark, ReadingProgress } from "../types";
+import { Play, Pause, SkipBack, SkipForward, Bookmark as BookmarkIcon, BookmarkCheck, Volume2, Search, ChevronDown, ChevronUp, Loader2, BookOpen } from "lucide-react";
+
+const FALLBACK_SURAH_LIST: SurahMeta[] = [
+  { number: 1, name: "الفاتحة", englishName: "Al-Fatihah", englishNameTranslation: "The Opening", numberOfAyahs: 7, revelationType: "Meccan" },
+  { number: 112, name: "الإخلاص", englishName: "Al-Ikhlas", englishNameTranslation: "The Sincerity", numberOfAyahs: 4, revelationType: "Meccan" },
+  { number: 113, name: "الفلق", englishName: "Al-Falaq", englishNameTranslation: "The Daybreak", numberOfAyahs: 5, revelationType: "Meccan" },
+  { number: 114, name: "الناس", englishName: "An-Nas", englishNameTranslation: "Mankind", numberOfAyahs: 6, revelationType: "Meccan" },
+];
+
+const AUDIO_BASE = "https://download.quranicaudio.com/quran/mishari_raashid_al_3afaasee/";
+
+interface Verse {
+  number: number;
+  text: string;
+  translation?: string;
+}
 
 export default function QuranSection() {
-  const [selectedSurahNumber, setSelectedSurahNumber] = useState<number>(1);
+  const [surahList, setSurahList] = useState<SurahMeta[]>(FALLBACK_SURAH_LIST);
+  const [selectedSurah, setSelectedSurah] = useState<SurahMeta>(FALLBACK_SURAH_LIST[0]);
+  const [verses, setVerses] = useState<Verse[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [fontSize, setFontSize] = useState<"sm" | "md" | "lg">("md");
-  const [bookmarks, setBookmarks] = useState<string[]>([]); // Array of "surahNumber-verseNumber"
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(0);
+  const [tafsir, setTafsir] = useState("");
+  const [showTafsir, setShowTafsir] = useState(false);
+  const [tafsirLoading, setTafsirLoading] = useState(false);
+  const [currentVerseHighlight, setCurrentVerseHighlight] = useState<number | null>(null);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioTime, setAudioTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [verseTimings, setVerseTimings] = useState<{ verse: number; time: number }[]>([]);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const readingAreaRef = useRef<HTMLDivElement>(null);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const activeSurah = SURAHS.find((s) => s.number === selectedSurahNumber) || SURAHS[0];
-
-  // Load Bookmarks from LocalStorage
   useEffect(() => {
+    fetchAllSurahs().then((s) => {
+      if (s.length > 0) setSurahList(s);
+    });
     try {
       const saved = localStorage.getItem("islamic_learning_quran_bookmarks");
-      if (saved) {
-        setBookmarks(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.error("Failed to load bookmarks", e);
-    }
+      if (saved) setBookmarks(JSON.parse(saved));
+    } catch {}
   }, []);
 
-  // Sync bookmarks with localStorage
-  const toggleBookmark = (surahNum: number, verseNum: number) => {
-    const key = `${surahNum}-${verseNum}`;
-    let updated: string[];
-    if (bookmarks.includes(key)) {
-      updated = bookmarks.filter((b) => b !== key);
-    } else {
-      updated = [...bookmarks, key];
+  const loadSurah = useCallback(async (surah: SurahMeta) => {
+    setSelectedSurah(surah);
+    setLoading(true);
+    setVerses([]);
+    setShowTafsir(false);
+    setTafsir("");
+    setCurrentVerseHighlight(null);
+    const detail = await fetchSurahDetail(surah.number);
+    if (detail && detail.verses) {
+      setVerses(detail.verses);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        setAudioPlaying(false);
+        const padded = String(surah.number).padStart(3, "0");
+        audioRef.current.src = `${AUDIO_BASE}${padded}.mp3`;
+        audioRef.current.load();
+      }
+      const totalWords = detail.verses.reduce((acc, v) => acc + (v.text?.split(/\s+/).length || 10), 0);
+      let cumulative = 0;
+      const timings = detail.verses.map((v) => {
+        const verseWords = v.text?.split(/\s+/).length || 10;
+        const t = cumulative;
+        cumulative += verseWords;
+        return { verse: v.number, time: (t / totalWords) * (audioDuration || 60) };
+      });
+      setVerseTimings(timings);
     }
-    setBookmarks(updated);
-    try {
-      localStorage.setItem("islamic_learning_quran_bookmarks", JSON.stringify(updated));
-    } catch (e) {
-      console.error("Failed to save bookmark", e);
-    }
-  };
+    setLoading(false);
+  }, [audioDuration]);
 
-  // Helper to format the audio URL with 3-digit zero-padding
-  const getAudioUrl = (surahNum: number) => {
-    const padded = String(surahNum).padStart(3, "0");
-    return `https://download.quranicaudio.com/quran/mishari_alaafasy/${padded}.mp3`;
-  };
-
-  // Safe wrapper for audio source change
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-      audioRef.current.src = getAudioUrl(selectedSurahNumber);
-      audioRef.current.load();
-    }
-  }, [selectedSurahNumber]);
+    loadSurah(FALLBACK_SURAH_LIST[0]);
+  }, []);
 
-  const handlePlayPause = () => {
+  useEffect(() => {
+    if (!audioRef.current || verseTimings.length === 0) return;
+    const handleTimeUpdate = () => {
+      const t = audioRef.current?.currentTime || 0;
+      setAudioTime(t);
+      const current = [...verseTimings].reverse().find((vt) => t >= vt.time);
+      if (current) setCurrentVerseHighlight(current.verse);
+      if (audioRef.current) setAudioDuration(audioRef.current.duration || 0);
+    };
+    audioRef.current.addEventListener("timeupdate", handleTimeUpdate);
+    return () => audioRef.current?.removeEventListener("timeupdate", handleTimeUpdate);
+  }, [verseTimings]);
+
+  useEffect(() => {
     if (!audioRef.current) return;
-    if (isPlaying) {
+    const handleLoaded = () => {
+      const dur = audioRef.current?.duration || 0;
+      setAudioDuration(dur);
+      if (verses.length > 0 && verseTimings.length > 0) {
+        const totalWords = verses.reduce((acc, v) => acc + (v.text?.split(/\s+/).length || 10), 0);
+        let cumulative = 0;
+        setVerseTimings(verses.map((v) => {
+          const verseWords = v.text?.split(/\s+/).length || 10;
+          const t = cumulative;
+          cumulative += verseWords;
+          return { verse: v.number, time: (t / totalWords) * dur };
+        }));
+      }
+    };
+    audioRef.current.addEventListener("loadedmetadata", handleLoaded);
+    return () => audioRef.current?.removeEventListener("loadedmetadata", handleLoaded);
+  }, [verses]);
+
+  useEffect(() => {
+    if (currentVerseHighlight !== null && readingAreaRef.current) {
+      const el = readingAreaRef.current.querySelector(`[data-verse="${currentVerseHighlight}"]`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [currentVerseHighlight]);
+
+  const toggleAudio = () => {
+    if (!audioRef.current) return;
+    if (audioPlaying) {
       audioRef.current.pause();
-      setIsPlaying(false);
     } else {
-      audioRef.current
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch((e) => {
-          console.error("Audio playback error:", e);
-          setIsPlaying(false);
-        });
+      audioRef.current.play().catch(() => {});
     }
-  };
-
-  const handleAudioTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
-  };
-
-  const handleAudioLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration);
-    }
-  };
-
-  const handleAudioEnded = () => {
-    setIsPlaying(false);
-    setCurrentTime(0);
+    setAudioPlaying(!audioPlaying);
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (audioRef.current) {
-      const value = parseFloat(e.target.value);
-      audioRef.current.currentTime = value;
-      setCurrentTime(value);
+    const t = parseFloat(e.target.value);
+    if (audioRef.current) audioRef.current.currentTime = t;
+    setAudioTime(t);
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    const results = await searchQuran(searchQuery);
+    setSearchResults(results);
+    setIsSearching(false);
+  };
+
+  const toggleBookmark = (verseNumber: number) => {
+    const key = `${selectedSurah.number}-${verseNumber}`;
+    const exists = bookmarks.find((b) => b.surahNumber === selectedSurah.number && b.verseNumber === verseNumber);
+    let updated: Bookmark[];
+    if (exists) {
+      updated = bookmarks.filter((b) => !(b.surahNumber === selectedSurah.number && b.verseNumber === verseNumber));
+    } else {
+      updated = [...bookmarks, { surahNumber: selectedSurah.number, verseNumber, surahName: selectedSurah.englishName, timestamp: new Date().toISOString() }];
+    }
+    setBookmarks(updated);
+    localStorage.setItem("islamic_learning_quran_bookmarks", JSON.stringify(updated));
+  };
+
+  const loadTafsir = async (verseNumber?: number) => {
+    setTafsirLoading(true);
+    setShowTafsir(true);
+    const text = await fetchTafsir(selectedSurah.number, verseNumber);
+    setTafsir(text || "Tafsir not available for this passage.");
+    setTafsirLoading(false);
+  };
+
+  const playVerse = (verseNumber: number) => {
+    if (!audioRef.current || verseTimings.length === 0) return;
+    const timing = verseTimings.find((vt) => vt.verse === verseNumber);
+    if (timing) {
+      audioRef.current.currentTime = timing.time;
+      if (!audioPlaying) {
+        audioRef.current.play().catch(() => {});
+        setAudioPlaying(true);
+      }
     }
   };
 
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
-    return `${m}:${s < 10 ? "0" : ""}${s}`;
-  };
+  const textClass = fontSize === "sm" ? "text-lg" : fontSize === "md" ? "text-xl" : "text-2xl";
+  const translationClass = fontSize === "sm" ? "text-xs" : fontSize === "md" ? "text-sm" : "text-base";
+  const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
   return (
-    <div id="quran-section" className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      {/* Invisible Audio Element */}
-      <audio
-        ref={audioRef}
-        src={getAudioUrl(selectedSurahNumber)}
-        onTimeUpdate={handleAudioTimeUpdate}
-        onLoadedMetadata={handleAudioLoadedMetadata}
-        onEnded={handleAudioEnded}
-      />
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4" style={{ height: "calc(100vh - 200px)" }}>
+      <audio ref={audioRef} onEnded={() => setAudioPlaying(false)} />
 
-      {/* Surah List & Custom Audio Desk */}
-      <div className="lg:col-span-4 flex flex-col gap-4">
-        {/* Surah Selector Desk */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs flex flex-col">
-          <span className="text-xs font-mono text-slate-400 font-medium mb-3 uppercase tracking-wider">Select Holy Surah</span>
-          <div className="space-y-1.5 max-h-[280px] overflow-y-auto pr-1">
-            {SURAHS.map((surah) => {
-              const isActive = surah.number === selectedSurahNumber;
-              return (
-                <button
-                  key={surah.number}
-                  onClick={() => setSelectedSurahNumber(surah.number)}
-                  className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between cursor-pointer ${
-                    isActive
-                      ? "bg-emerald-50 border-emerald-200 text-emerald-950 font-medium"
-                      : "bg-slate-50 border-slate-100 text-slate-700 hover:bg-slate-100/60"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center font-mono ${
-                      isActive ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"
-                    }`}>
-                      {surah.number}
-                    </span>
-                    <div>
-                      <h4 className="text-sm tracking-tight">{surah.englishName}</h4>
-                      <p className="text-[10px] text-slate-400 font-mono italic">{surah.englishNameTranslation}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] font-mono text-slate-500 font-semibold uppercase px-2 py-0.5 bg-slate-100 border border-slate-200/50 rounded">
-                      {surah.revelationType}
-                    </span>
-                    <p className="text-[11px] text-slate-400 block mt-0.5">{surah.numberOfAyahs} Ayahs</p>
-                  </div>
-                </button>
-              );
-            })}
+      {/* Sidebar */}
+      <div className="lg:col-span-3 flex flex-col gap-3 overflow-hidden">
+        <div className="bg-white rounded-2xl p-3 border border-slate-100 shadow-xs flex flex-col max-h-[300px]">
+          <div className="flex items-center gap-2 mb-2">
+            <Search className="w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search surahs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              className="flex-1 text-xs bg-transparent outline-none"
+            />
+          </div>
+          <div className="flex-1 overflow-y-auto space-y-1 scrollbar-thin">
+            {surahList.map((s) => (
+              <button
+                key={s.number}
+                onClick={() => loadSurah(s)}
+                className={`w-full text-left p-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                  selectedSurah.number === s.number ? "bg-emerald-50 text-emerald-900 border border-emerald-200" : "hover:bg-slate-50 text-slate-700"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded bg-slate-100 text-[9px] font-mono font-bold flex items-center justify-center">{s.number}</span>
+                  <span className="truncate">{s.englishName}</span>
+                </span>
+                <span className="text-[9px] text-slate-400">{s.numberOfAyahs} Ayahs</span>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Calligraphic Audio Audio Player Desk */}
-        <div className="bg-gradient-to-b from-emerald-950 to-slate-900 rounded-2xl p-5 text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl"></div>
-          
-          <div className="mb-4">
-            <span className="text-[10px] font-mono uppercase text-emerald-400 tracking-wider">Mishary Alafasy Recitation</span>
-            <h3 className="text-lg font-sans font-semibold tracking-tight mt-0.5 text-emerald-100">
-              Surah {activeSurah.englishName}
-            </h3>
-            <p className="text-xs text-slate-400 italic">Streaming Audio recitation of the full Surah</p>
+        {/* Audio Player */}
+        <div className="bg-gradient-to-b from-emerald-950 to-slate-900 rounded-2xl p-4 text-white shadow-xl">
+          <p className="text-[10px] font-mono text-emerald-400 uppercase tracking-wider mb-1">Mishary Alafasy</p>
+          <h3 className="text-sm font-semibold text-emerald-100 mb-2">{selectedSurah.englishName}</h3>
+          <input type="range" min={0} max={audioDuration || 100} value={audioTime} onChange={handleSeek} className="w-full accent-emerald-500 h-1 rounded cursor-pointer" />
+          <div className="flex justify-between text-[9px] text-slate-400 font-mono mt-1">
+            <span>{formatTime(audioTime)}</span>
+            <span>{formatTime(audioDuration)}</span>
           </div>
-
-          {/* Time slider */}
-          <div className="mb-4">
-            <input
-              type="range"
-              min={0}
-              max={duration || 100}
-              value={currentTime}
-              onChange={handleSeek}
-              className="w-full accent-emerald-500 bg-slate-800 h-1.5 rounded-lg cursor-pointer appearance-none"
-            />
-            <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 mt-2">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
-          </div>
-
-          {/* Play pauses button and display */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className={`w-2.5 h-2.5 rounded-full ${isPlaying ? "bg-emerald-500 animate-pulse" : "bg-slate-500"}`}></div>
-              <span className="text-[11px] font-mono text-slate-300">
-                {isPlaying ? "Reciting..." : "Paused"}
-              </span>
-            </div>
-            
-            <button
-              onClick={handlePlayPause}
-              className="w-11 h-11 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-full flex items-center justify-center cursor-pointer transition-all shadow-lg active:scale-95"
-            >
-              {isPlaying ? <Pause className="w-5 h-5 fill-slate-950" /> : <Play className="w-5 h-5 fill-slate-950 translate-x-0.5" />}
+          <div className="flex items-center justify-center gap-4 mt-3">
+            <button onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10); }} className="text-slate-400 hover:text-white transition-colors cursor-pointer">
+              <SkipBack className="w-4 h-4" />
+            </button>
+            <button onClick={toggleAudio} className="w-10 h-10 bg-emerald-500 hover:bg-emerald-400 rounded-full flex items-center justify-center cursor-pointer transition-all active:scale-95">
+              {audioPlaying ? <Pause className="w-5 h-5 fill-slate-950" /> : <Play className="w-5 h-5 fill-slate-950 translate-x-0.5" />}
+            </button>
+            <button onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.min(audioDuration, audioRef.current.currentTime + 10); }} className="text-slate-400 hover:text-white transition-colors cursor-pointer">
+              <SkipForward className="w-4 h-4" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Main Quran Scroll Board */}
-      <div className="lg:col-span-8 bg-white rounded-2xl p-6 border border-slate-100 shadow-xs flex flex-col min-h-[500px]">
-        {/* Top bar with tools */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl font-bold font-sans text-emerald-950">{activeSurah.englishName}</span>
-            <span className="text-sm text-slate-400">({activeSurah.englishNameTranslation})</span>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {/* Font size adjustments */}
-            <div className="flex items-center bg-slate-50 rounded-xl p-1 border border-slate-200">
-              <button
-                onClick={() => setFontSize("sm")}
-                className={`px-2 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${fontSize === "sm" ? "bg-white text-emerald-950 shadow-xs" : "text-slate-400"}`}
-              >
-                A-
+      {/* Reading Area */}
+      <div className="lg:col-span-9 flex flex-col gap-3 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-xs flex flex-col flex-1 overflow-hidden">
+          {/* Header */}
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-emerald-950">{selectedSurah.englishName}</h2>
+              <p className="text-[11px] text-slate-400">{selectedSurah.englishNameTranslation} · {selectedSurah.numberOfAyahs} Ayahs · {selectedSurah.revelationType}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => loadTafsir()} className="text-[10px] bg-amber-50 border border-amber-100 text-amber-800 px-3 py-1.5 rounded-lg font-medium hover:bg-amber-100 transition-colors cursor-pointer">
+                Tafsir
               </button>
-              <button
-                onClick={() => setFontSize("md")}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${fontSize === "md" ? "bg-white text-emerald-950 shadow-xs" : "text-slate-400"}`}
-              >
-                A
-              </button>
-              <button
-                onClick={() => setFontSize("lg")}
-                className={`px-2 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${fontSize === "lg" ? "bg-white text-emerald-950 shadow-xs" : "text-slate-400"}`}
-              >
-                A+
-              </button>
+              <div className="flex bg-slate-50 rounded-lg p-0.5 border border-slate-200">
+                {(["sm", "md", "lg"] as const).map((s) => (
+                  <button key={s} onClick={() => setFontSize(s)} className={`px-2 py-1 text-[10px] font-bold rounded cursor-pointer ${fontSize === s ? "bg-white shadow text-emerald-950" : "text-slate-400"}`}>
+                    {s === "sm" ? "A-" : s === "md" ? "A" : "A+"}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Scrollable list of verses */}
-        <div className="flex-1 space-y-6 max-h-[540px] overflow-y-auto pr-1">
-          {/* Audio warning info */}
-          <div className="bg-emerald-50/50 rounded-xl p-3 border border-emerald-100 text-xs text-emerald-800 flex items-center gap-2">
-            <Layers className="w-4 h-4 shrink-0" />
-            <span>Select any Ayah's star to bookmark it. Recitations automatically play the whole selected Surah continuously.</span>
-          </div>
-
-          {activeSurah.ayahs.map((ayah) => {
-            const isBookmarked = bookmarks.includes(`${activeSurah.number}-${ayah.number}`);
-            
-            // Adjust sizes according to user selection
-            const textClass =
-              fontSize === "sm"
-                ? "text-xl"
-                : fontSize === "md"
-                ? "text-2xl"
-                : "text-3xl";
-
-            const translationClass =
-              fontSize === "sm"
-                ? "text-xs"
-                : fontSize === "md"
-                ? "text-sm"
-                : "text-base";
-
-            return (
-              <div
-                key={ayah.number}
-                className="group relative border-b border-dashed border-slate-150 pb-6 transition-all"
-              >
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  {/* Metadata and Bookmark */}
-                  <div className="flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-mono font-bold flex items-center justify-center text-slate-500">
-                      {ayah.number}
-                    </span>
-                    <button
-                      onClick={() => toggleBookmark(activeSurah.number, ayah.number)}
-                      className={`p-1.5 rounded-lg border transition-all cursor-pointer hover:scale-105 ${
-                        isBookmarked
-                          ? "bg-amber-50 border-amber-200 text-amber-500"
-                          : "bg-slate-50 border-slate-100 text-slate-400 hover:text-slate-600"
-                      }`}
-                      title={isBookmarked ? "Remove Bookmark" : "Add Bookmark"}
-                    >
-                      {isBookmarked ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  
-                  {/* Calligraphy Verse Text */}
-                  <div className="flex-1 text-right">
-                    <p className={`${textClass} leading-loose font-sans font-bold text-slate-900 tracking-wide select-all`} dir="rtl">
-                      {ayah.text}
-                    </p>
-                  </div>
-                </div>
-
-                {/* English translation block */}
-                <div className="pl-9 pr-4 md:pr-10 mt-2">
-                  <p className={`${translationClass} leading-relaxed text-slate-600 tracking-tight font-sans`}>
-                    {ayah.translation}
-                  </p>
-                </div>
+          {/* Tafsir Panel */}
+          {showTafsir && (
+            <div className="tafsir-panel mx-4 mt-4 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">Tafsir</h4>
+                <button onClick={() => setShowTafsir(false)} className="text-amber-600 hover:text-amber-800 cursor-pointer">
+                  <ChevronUp className="w-4 h-4" />
+                </button>
               </div>
-            );
-          })}
+              {tafsirLoading ? (
+                <div className="flex items-center gap-2 text-amber-700"><Loader2 className="w-4 h-4 animate-spin" /><span className="text-xs">Loading tafsir...</span></div>
+              ) : (
+                <p className="text-[13px] text-amber-900 leading-relaxed font-sans" style={{ fontFamily: "'Amiri', serif" }}>{tafsir}</p>
+              )}
+            </div>
+          )}
+
+          {/* Verses */}
+          <div ref={readingAreaRef} className="flex-1 overflow-y-auto p-6 space-y-5 scrollbar-thin">
+            {selectedSurah.number !== 1 && selectedSurah.number !== 9 && (
+              <div className="text-center mb-6">
+                <p className="text-2xl font-amiri text-emerald-900 leading-loose" dir="rtl">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</p>
+                <p className="text-[10px] text-slate-400 mt-1">In the name of Allah, the Entirely Merciful, the Especially Merciful</p>
+              </div>
+            )}
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mb-3" />
+                <span className="text-xs font-mono">Loading verses...</span>
+              </div>
+            ) : verses.length === 0 ? (
+              <div className="text-center py-20 text-slate-400 text-xs">No verses loaded.</div>
+            ) : (
+              verses.map((v) => (
+                <div
+                  key={v.number}
+                  data-verse={v.number}
+                  className={`p-4 rounded-xl transition-all duration-300 border ${
+                    currentVerseHighlight === v.number
+                      ? "bg-emerald-50 border-emerald-200 shadow-sm"
+                      : "border-transparent hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-mono font-bold flex items-center justify-center text-slate-500 shrink-0">
+                        {v.number}
+                      </span>
+                      <button onClick={() => playVerse(v.number)} className="p-1 rounded text-slate-400 hover:text-emerald-600 transition-colors cursor-pointer" title="Play from here">
+                        <Volume2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => toggleBookmark(v.number)} className={`p-1 rounded cursor-pointer ${bookmarks.find((b) => b.surahNumber === selectedSurah.number && b.verseNumber === v.number) ? "text-amber-500" : "text-slate-300 hover:text-slate-500"}`}>
+                        {bookmarks.find((b) => b.surahNumber === selectedSurah.number && b.verseNumber === v.number) ? <BookmarkCheck className="w-3.5 h-3.5" /> : <BookmarkIcon className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <div className="flex-1 text-right">
+                      <p className={`${textClass} font-amiri text-slate-900 leading-loose select-all`} dir="rtl" style={{ fontFamily: "'Scheherazade New', serif" }}>
+                        {v.text}
+                      </p>
+                    </div>
+                  </div>
+                  {v.translation && (
+                    <p className={`${translationClass} text-slate-500 mt-2 pl-12`}>{v.translation}</p>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
