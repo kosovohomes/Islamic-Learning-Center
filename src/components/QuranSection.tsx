@@ -33,6 +33,9 @@ export default function QuranSection() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [fontSize, setFontSize] = useState<"sm" | "md" | "lg">("md");
   const [currentVerseHighlight, setCurrentVerseHighlight] = useState<number | null>(null);
+  const [showTafsir, setShowTafsir] = useState(false);
+  const [tafsirText, setTafsirText] = useState("");
+  const [tafsirLoading, setTafsirLoading] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioTime, setAudioTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
@@ -132,6 +135,21 @@ export default function QuranSection() {
     setAudioTime(t);
   };
 
+  const loadTafsir = async () => {
+    setTafsirLoading(true);
+    setShowTafsir(true);
+    try {
+      const res = await fetch(`https://api.alquran.cloud/v1/surah/${selectedSurah.number}/en.sahih`);
+      const json = await res.json();
+      const ayahs = json.data?.ayahs || [];
+      const text = ayahs.map((a: any) => `${a.numberInSurah}. ${a.text}`).join("\n\n");
+      setTafsirText(text || "Translation not available for this surah.");
+    } catch {
+      setTafsirText("Failed to load translation.");
+    }
+    setTafsirLoading(false);
+  };
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     const results = await searchQuran(searchQuery);
@@ -205,6 +223,9 @@ export default function QuranSection() {
             <p className="text-[11px] text-slate-400">{selectedSurah.englishNameTranslation} · {selectedSurah.numberOfAyahs} Ayahs · {selectedSurah.revelationType}</p>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={loadTafsir} className={`text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${showTafsir ? "bg-amber-100 border border-amber-200 text-amber-800" : "bg-amber-50 border border-amber-100 text-amber-700 hover:bg-amber-100"}`}>
+              Tafsir
+            </button>
             <div className="flex bg-slate-50 rounded-lg p-0.5 border border-slate-200">
               {(["sm", "md", "lg"] as const).map((s) => (
                 <button key={s} onClick={() => setFontSize(s)} className={`px-2 py-1 text-[10px] font-bold rounded cursor-pointer ${fontSize === s ? "bg-white shadow text-emerald-950" : "text-slate-400"}`}>
@@ -214,6 +235,21 @@ export default function QuranSection() {
             </div>
           </div>
         </div>
+
+        {/* Tafsir Panel */}
+        {showTafsir && (
+          <div className="mx-4 mt-3 rounded-xl p-4" style={{ background: "linear-gradient(135deg, rgba(255,251,235,0.8), rgba(254,243,199,0.6))", border: "1px solid rgba(217,119,6,0.15)" }}>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">English Translation (Sahih International)</h4>
+              <button onClick={() => setShowTafsir(false)} className="text-amber-600 hover:text-amber-800 cursor-pointer text-xs">Close</button>
+            </div>
+            {tafsirLoading ? (
+              <div className="flex items-center gap-2 text-amber-700"><Loader2 className="w-4 h-4 animate-spin" /><span className="text-xs">Loading...</span></div>
+            ) : (
+              <p className="text-[13px] text-amber-900 leading-relaxed whitespace-pre-wrap" style={{ fontFamily: "'Amiri', serif" }}>{tafsirText}</p>
+            )}
+          </div>
+        )}
 
         {/* Verses */}
         <div ref={readingAreaRef} className="flex-1 overflow-y-auto p-6 space-y-4">
