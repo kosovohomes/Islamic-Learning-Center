@@ -1,8 +1,8 @@
 import { SurahMeta } from "../types";
 
-const BASE_URL = "https://api.ummahapi.com/v1";
+const BASE = "https://api.alquran.cloud/v1";
 
-export interface UmmahSurah {
+interface AlquranSurah {
   number: number;
   name: string;
   englishName: string;
@@ -11,71 +11,78 @@ export interface UmmahSurah {
   revelationType: string;
 }
 
-export interface UmmahVerse {
+interface AlquranVerse {
   number: number;
   text: string;
-  translation?: string;
-}
-
-export interface UmmahSurahDetail {
-  surah: UmmahSurah;
-  verses: UmmahVerse[];
-}
-
-export interface UmmahSearchResult {
-  surah: number;
-  verse: number;
-  text: string;
-  translation?: string;
+  numberInSurah: number;
 }
 
 export async function fetchAllSurahs(): Promise<SurahMeta[]> {
   try {
-    const res = await fetch(`${BASE_URL}/quran`);
+    const res = await fetch(`${BASE}/surah`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
-    const surahs = json.data?.surahs || json.data || [];
-    return surahs.map((s: any) => ({
+    return (json.data || []).map((s: AlquranSurah) => ({
       number: s.number,
-      name: s.name || "",
-      englishName: s.englishName || s.name_english || "",
-      englishNameTranslation: s.englishNameTranslation || s.name_translation || "",
-      numberOfAyahs: s.numberOfAyahs || s.verses_count || 0,
-      revelationType: s.revelationType || "Meccan",
+      name: s.name,
+      englishName: s.englishName,
+      englishNameTranslation: s.englishNameTranslation,
+      numberOfAyahs: s.numberOfAyahs,
+      revelationType: s.revelationType as "Meccan" | "Medinan",
     }));
   } catch (err) {
-    console.error("Failed to fetch surahs from UmmahAPI:", err);
+    console.error("Failed to fetch surahs:", err);
     return [];
   }
 }
 
-export async function fetchSurahDetail(surahNumber: number): Promise<UmmahSurahDetail | null> {
+export interface VerseDetail {
+  number: number;
+  numberInSurah: number;
+  text: string;
+}
+
+export async function fetchSurahArabic(surahNumber: number): Promise<VerseDetail[]> {
   try {
-    const res = await fetch(`${BASE_URL}/quran/surah/${surahNumber}`);
+    const res = await fetch(`${BASE}/surah/${surahNumber}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
-    const data = json.data || json;
-    return {
-      surah: data.surah || data,
-      verses: data.verses || [],
-    };
+    return (json.data?.ayahs || []).map((a: AlquranVerse) => ({
+      number: a.numberInSurah,
+      numberInSurah: a.numberInSurah,
+      text: a.text,
+    }));
   } catch (err) {
-    console.error(`Failed to fetch surah ${surahNumber}:`, err);
-    return null;
+    console.error(`Failed to fetch Arabic surah ${surahNumber}:`, err);
+    return [];
   }
 }
 
-export async function searchQuran(query: string): Promise<UmmahSearchResult[]> {
+export async function fetchSurahTranslation(surahNumber: number, edition = "en.sahih"): Promise<VerseDetail[]> {
   try {
-    const res = await fetch(`${BASE_URL}/quran/search?q=${encodeURIComponent(query)}`);
+    const res = await fetch(`${BASE}/surah/${surahNumber}/${edition}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
-    const results = json.data?.results || json.data || [];
-    return results.map((r: any) => ({
-      surah: r.surah || r.surah_number || 0,
-      verse: r.verse || r.verse_number || 0,
-      text: r.text || "",
-      translation: r.translation || "",
+    return (json.data?.ayahs || []).map((a: AlquranVerse) => ({
+      number: a.numberInSurah,
+      numberInSurah: a.numberInSurah,
+      text: a.text,
+    }));
+  } catch (err) {
+    console.error(`Failed to fetch translation for surah ${surahNumber}:`, err);
+    return [];
+  }
+}
+
+export async function searchQuran(query: string): Promise<{ surah: number; verse: number; text: string }[]> {
+  try {
+    const res = await fetch(`${BASE}/search/${encodeURIComponent(query)}/all/en`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    return (json.data?.matches || []).map((m: any) => ({
+      surah: m.surah,
+      verse: m.numberInSurah,
+      text: m.text,
     }));
   } catch (err) {
     console.error("Search failed:", err);
@@ -83,15 +90,12 @@ export async function searchQuran(query: string): Promise<UmmahSearchResult[]> {
   }
 }
 
-export async function fetchTafsir(surahNumber: number, verseNumber?: number): Promise<string> {
+export async function fetchTafsir(surahNumber: number): Promise<string> {
   try {
-    const url = verseNumber
-      ? `${BASE_URL}/quran/tafsir/${surahNumber}/${verseNumber}`
-      : `${BASE_URL}/quran/tafsir/${surahNumber}`;
-    const res = await fetch(url);
+    const res = await fetch(`${BASE}/surah/${surahNumber}/en.tafsir.muyassar`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
-    return json.data?.tafsir || json.data?.text || json.data || "";
+    return json.data?.ayahs?.map((a: any) => a.text).join("\n\n") || "";
   } catch (err) {
     console.error("Failed to fetch tafsir:", err);
     return "";
